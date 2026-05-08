@@ -249,7 +249,7 @@
   <main class="page">
     <section class="hero" aria-label="Traffic source">
       <div class="eyebrow">ANWB Live</div>
-      <h1 class="title">Traffic</h1>
+      <h1 class="title">Netherlands traffic</h1>
       <div class="accent-line"></div>
 
       <div class="summary">
@@ -276,7 +276,8 @@
     var ANWB_URL = 'https://www.anwb.nl/verkeer/filelijst';
 
     function buildApiUrl() {
-      return 'https://corsproxy.io/?' + encodeURIComponent(ANWB_URL + '?_=' + new Date().getTime());
+      // Jina Reader returns a cleaner text version of the ANWB page.
+      return 'https://r.jina.ai/http://r.jina.ai/http://r.jina.ai/http://https://www.anwb.nl/verkeer/filelijst?_=' + new Date().getTime();
     }
 
     function clean(text) {
@@ -304,13 +305,13 @@
       var seen = {};
 
       text = clean(text)
-        .replace(/\{/g, ' ')
-        .replace(/\}/g, ' ')
-        .replace(/\[/g, ' ')
-        .replace(/\]/g, ' ')
-        .replace(/"/g, ' ')
-        .replace(/:/g, ' ')
-        .replace(/,/g, ' ');
+        .split('{').join(' ')
+        .split('}').join(' ')
+        .split('[').join(' ')
+        .split(']').join(' ')
+        .split('"').join(' ')
+        .split(':').join(' ')
+        .split(',').join(' ');
 
       var words = text.split(' ');
 
@@ -326,69 +327,18 @@
         return String(parseInt(word, 10)) === word;
       }
 
-      for (var i = 0; i < words.length; i++) {
-        if (!isRoad(words[i])) continue;
-
-        var road = words[i];
-        var routeWords = [];
-        var delay = 0;
-        var km = 0;
-        var closed = false;
-        var end = Math.min(words.length, i + 26);
-
-        for (var j = i + 1; j < end; j++) {
-          var word = words[j];
-          var prev = words[j - 1];
-
-          if (j > i + 1 && isRoad(word)) break;
-
-          if (word === 'min' && isNumber(prev)) {
-            delay = parseInt(prev, 10);
-            continue;
-          }
-
-          if (word === 'km' && isNumber(prev)) {
-            km = parseInt(prev, 10);
-            continue;
-          }
-
-          if (word === 'Dicht') {
-            closed = true;
-            continue;
-          }
-
-          if (
-            word === '+' ||
-            word === 'min' ||
-            word === 'km' ||
-            word === 'alertC' ||
-            word === 'text' ||
-            word === 'reason' ||
-            word === 'Langzaam' ||
-            word === 'rijdend' ||
-            word === 'tot' ||
-            word === 'stilstaand' ||
-            word === 'verkeer' ||
-            word === 'Te' ||
-            word === 'hoog' ||
-            word === 'voertuig'
-          ) {
-            continue;
-          }
-
-          if (routeWords.length < 8 && !isNumber(word)) {
-            routeWords.push(word);
-          }
-        }
-
-        if (!km && !delay && !closed) continue;
-
+      function addItem(road, routeWords, delay, km, closed) {
         var route = clean(routeWords.join(' '));
-        if (!route || route.length < 4) route = 'Netherlands';
-        if (route.indexOf('alertC') > -1 || route.indexOf('reason') > -1 || route.indexOf('text') > -1) continue;
+        route = route.split('Files in Nederland').join('');
+        route = route.split('Overzicht van files op wegnummer').join('');
+        route = route.split('Bekijk meer incidenten').join('');
+        route = clean(route);
 
-        var key = road + '|' + route + '|' + km + '|' + delay + '|' + closed;
-        if (seen[key]) continue;
+        if (!route || route.length < 3) return;
+        if (route.length > 80) route = route.substring(0, 80);
+
+        var key = road + '|' + route + '|' + delay + '|' + km + '|' + closed;
+        if (seen[key]) return;
         seen[key] = true;
 
         items.push({
@@ -400,6 +350,54 @@
         });
 
         totalKm += km;
+      }
+
+      for (var i = 0; i < words.length; i++) {
+        if (!isRoad(words[i])) continue;
+
+        var road = words[i];
+        var routeWords = [];
+        var delay = 0;
+        var km = 0;
+        var closed = false;
+        var foundMetric = false;
+        var end = Math.min(words.length, i + 32);
+
+        for (var j = i + 1; j < end; j++) {
+          var word = words[j];
+          var prev = words[j - 1];
+
+          if (j > i + 1 && isRoad(word)) break;
+
+          if (word === 'min' && isNumber(prev)) {
+            delay = parseInt(prev, 10);
+            foundMetric = true;
+            continue;
+          }
+
+          if (word === 'km' && isNumber(prev)) {
+            km = parseInt(prev, 10);
+            foundMetric = true;
+            continue;
+          }
+
+          if (word === 'Dicht') {
+            closed = true;
+            foundMetric = true;
+            continue;
+          }
+
+          if (foundMetric) continue;
+
+          if (word === '+' || isNumber(word)) continue;
+          if (word === 'files' || word === 'file') continue;
+          if (word === 'alertC' || word === 'reason' || word === 'text') continue;
+
+          if (routeWords.length < 8) routeWords.push(word);
+        }
+
+        if (!km && !delay && !closed) continue;
+        addItem(road, routeWords, delay, km, closed);
       }
 
       items.sort(function (a, b) {
