@@ -213,11 +213,13 @@
       color: var(--muted);
       font-size: 18px;
       line-height: 1.28;
+      max-height: 46px;
+      overflow: hidden;
     }
 
     .impact {
       text-align: right;
-      font-size: 31px;
+      font-size: 27px;
       font-weight: 800;
       letter-spacing: -0.04em;
     }
@@ -248,18 +250,18 @@
 
   <main class="page">
     <section class="hero" aria-label="Traffic source">
-      <div class="eyebrow">Live road updates</div>
+      <div class="eyebrow">Verkeerplaza Live</div>
       <h1 class="title">Traffic</h1>
       <div class="accent-line"></div>
 
       <div class="summary">
         <div class="summary-box">
-          <div class="summary-number" id="jam-count">--</div>
+          <div class="summary-number" id="traffic-count">--</div>
           <div class="summary-label">Items</div>
         </div>
         <div class="summary-box">
-          <div class="summary-number" id="jam-km">--</div>
-          <div class="summary-label">Total KM</div>
+          <div class="summary-number" id="traffic-roads">--</div>
+          <div class="summary-label">Roads</div>
         </div>
       </div>
     </section>
@@ -273,15 +275,17 @@
   </main>
 
   <script>
-    // Direct Rijkswaterstaat API. This keeps the setup GitHub-only.
-    var TRAFFIC_API_URL = 'https://api.rwsverkeersinfo.nl/api/traffic/';
-
-    function buildApiUrl() {
-      return TRAFFIC_API_URL + '?_=' + new Date().getTime();
-    }
+    var RSS_FEED = 'https://www.verkeerplaza.nl/rssfeed';
+    var RSS_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(RSS_FEED);
 
     function clean(text) {
       return String(text || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function stripHtml(html) {
+      var div = document.createElement('div');
+      div.innerHTML = html || '';
+      return clean(div.textContent || '');
     }
 
     function escapeHtml(text) {
@@ -293,85 +297,124 @@
         .replace(/'/g, '&#039;');
     }
 
-    function typeLabel(item) {
-      var title = clean(item.title).toLowerCase();
-      var cause = clean(item.cause).toLowerCase();
+    function shortText(text, maxLength) {
+      text = clean(text);
+      if (text.length <= maxLength) return text;
+      return text.substring(0, maxLength).replace(/\s+\S*$/, '') + '...';
+    }
 
-      if (title.indexOf('langzaam') > -1 || title.indexOf('file') > -1 || cause.indexOf('file') > -1) return 'Traffic jam';
-      if (cause.indexOf('ongeval') > -1 || title.indexOf('ongeval') > -1 || cause.indexOf('incident') > -1) return 'Incident';
-      if (cause.indexOf('werk') > -1 || title.indexOf('werk') > -1 || title.indexOf('afgesloten') > -1 || cause.indexOf('afsluiting') > -1) return 'Roadworks';
-      if (cause.indexOf('object') > -1 || title.indexOf('object') > -1) return 'Object on road';
-      if (cause.indexOf('slecht weer') > -1 || title.indexOf('weer') > -1) return 'Weather warning';
+    function roadFromText(text) {
+      var match = clean(text).match(/\b[ANE]\d{1,3}\b/);
+      return match ? match[0] : 'NL';
+    }
+
+    function typeFromText(text) {
+      var lower = clean(text).toLowerCase();
+      if (lower.indexOf('file') > -1 || lower.indexOf('langzaam') > -1 || lower.indexOf('vertraging') > -1) return 'Traffic jam';
+      if (lower.indexOf('ongeval') > -1 || lower.indexOf('aanrijding') > -1 || lower.indexOf('incident') > -1) return 'Incident';
+      if (lower.indexOf('afgesloten') > -1 || lower.indexOf('dicht') > -1) return 'Closed road';
+      if (lower.indexOf('werk') > -1) return 'Roadworks';
       return 'Traffic update';
     }
 
-    function itemImpact(item) {
-      var delay = Number(item.delay || 0);
-      var length = Number(item.length || 0);
+    function impactFromText(text) {
+      var lower = clean(text).toLowerCase();
+      var min = lower.match(/(\d{1,3})\s*min/);
+      var km = lower.match(/(\d{1,3})\s*km/);
 
-      if (delay > 0) {
-        return {
-          value: Math.round(delay) + ' min',
-          label: length > 0 ? (length / 1000).toFixed(1) + ' km' : 'delay'
-        };
+      if (min) {
+        return { value: '+' + min[1] + ' min', label: km ? km[1] + ' km' : 'delay' };
       }
 
-      if (length > 0) {
-        return {
-          value: (length / 1000).toFixed(1),
-          label: 'km'
-        };
+      if (km) {
+        return { value: km[1] + ' km', label: 'traffic' };
       }
 
-      return {
-        value: 'Live',
-        label: 'update'
-      };
+      if (lower.indexOf('dicht') > -1 || lower.indexOf('afgesloten') > -1) {
+        return { value: 'Closed', label: 'road' };
+      }
+
+      return { value: 'Live', label: 'update' };
     }
 
-    function renderTraffic(data) {
+    function isRelevantTraffic(text) {
+      var lower = clean(text).toLowerCase();
+      if (lower.length < 5) return false;
+      return (
+        lower.indexOf('file') > -1 ||
+        lower.indexOf('vertraging') > -1 ||
+        lower.indexOf('ongeval') > -1 ||
+        lower.indexOf('aanrijding') > -1 ||
+        lower.indexOf('afgesloten') > -1 ||
+        lower.indexOf('dicht') > -1 ||
+        lower.indexOf('werk') > -1 ||
+        lower.indexOf('a1') > -1 ||
+        lower.indexOf('a2') > -1 ||
+        lower.indexOf('a4') > -1 ||
+        lower.indexOf('a9') > -1 ||
+        lower.indexOf('a10') > -1 ||
+        lower.indexOf('a12') > -1 ||
+        lower.indexOf('a15') > -1 ||
+        lower.indexOf('a16') > -1 ||
+        lower.indexOf('a27') > -1 ||
+        lower.indexOf('a28') > -1
+      );
+    }
+
+    function render(items) {
       var container = document.getElementById('traffic');
-      var items = data.obstructions || [];
-      var totalLength = Number(data.totalLengthOfJams || 0);
+      var parsed = [];
+      var roads = {};
 
-      items = items.filter(function (item) {
-        return item && item.isCurrent !== false;
-      });
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var titleNode = item.getElementsByTagName('title')[0];
+        var descNode = item.getElementsByTagName('description')[0];
+        var title = stripHtml(titleNode ? titleNode.textContent : '');
+        var desc = stripHtml(descNode ? descNode.textContent : '');
+        var combined = clean(title + ' ' + desc);
 
-      items.sort(function (a, b) {
-        var delayDiff = Number(b.delay || 0) - Number(a.delay || 0);
-        if (delayDiff !== 0) return delayDiff;
-        return Number(b.length || 0) - Number(a.length || 0);
-      });
+        if (!isRelevantTraffic(combined)) continue;
 
-      var displayItems = items.slice(0, 6);
+        var road = roadFromText(combined);
+        var type = typeFromText(combined);
+        var impact = impactFromText(combined);
 
-      document.getElementById('jam-count').textContent = data.numberOfJams || items.length || 0;
-      document.getElementById('jam-km').textContent = totalLength > 0 ? (totalLength / 1000).toFixed(1) : '0';
+        roads[road] = true;
 
-      if (!displayItems.length) {
-        container.innerHTML = '<div class="status">No major traffic updates right now.</div>';
+        parsed.push({
+          road: road,
+          type: type,
+          title: title,
+          desc: desc,
+          impact: impact
+        });
+      }
+
+      parsed = parsed.slice(0, 6);
+
+      document.getElementById('traffic-count').textContent = parsed.length;
+      document.getElementById('traffic-roads').textContent = Object.keys(roads).length;
+
+      if (!parsed.length) {
+        container.innerHTML = '<div class="status">No current traffic issues.</div>';
         return;
       }
 
       var html = '';
-      for (var i = 0; i < displayItems.length; i++) {
-        var traffic = displayItems[i];
-        var impact = itemImpact(traffic);
-        var road = clean(traffic.roadNumber || traffic.road || 'Road');
-        var title = typeLabel(traffic);
-        var location = clean(traffic.locationText || traffic.directionText || traffic.description || 'Netherlands');
-        var direction = clean(traffic.directionText);
+      for (var j = 0; j < parsed.length; j++) {
+        var traffic = parsed[j];
+        var detail = traffic.desc || traffic.title;
 
         html += '<article class="traffic-item">' +
-          '<div class="road">' + escapeHtml(road) + '</div>' +
+          '<div class="road">' + escapeHtml(traffic.road) + '</div>' +
           '<div>' +
-            '<h2 class="headline">' + escapeHtml(title) + '</h2>' +
-            '<div class="meta">' + escapeHtml(direction ? direction + ' • ' + location : location) + '</div>' +
+            '<h2 class="headline">' + escapeHtml(traffic.type) + '</h2>' +
+            '<div class="meta">' + escapeHtml(shortText(detail, 120)) + '</div>' +
           '</div>' +
           '<div class="impact">' +
-            escapeHtml(impact.value) +
-            '<div class="impact-label">' + escapeHtml(impact.label) + '</div>' +
+            escapeHtml(traffic.impact.value) +
+            '<div class="impact-label">' + escapeHtml(traffic.impact.label) + '</div>' +
           '</div>' +
         '</article>';
       }
@@ -379,28 +422,26 @@
       container.innerHTML = html;
     }
 
-    function loadTraffic() {
+    function load() {
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', buildApiUrl(), true);
-      xhr.setRequestHeader('Cache-Control', 'no-cache');
+      xhr.open('GET', RSS_URL + '&_=' + new Date().getTime(), true);
       xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              renderTraffic(JSON.parse(xhr.responseText));
-            } catch (error) {
-              document.getElementById('traffic').innerHTML = '<div class="status">Traffic data could not be read.</div>';
-            }
+            var parser = new DOMParser();
+            var xml = parser.parseFromString(xhr.responseText, 'text/xml');
+            var items = xml.getElementsByTagName('item');
+            render(items);
           } else {
-            document.getElementById('traffic').innerHTML = '<div class="status">Traffic data is temporarily unavailable.</div>';
+            document.getElementById('traffic').innerHTML = '<div class="status">Traffic unavailable.</div>';
           }
         }
       };
       xhr.send();
     }
 
-    loadTraffic();
-    setInterval(loadTraffic, 60000);
+    load();
+    setInterval(load, 120000);
 
     setTimeout(function () {
       window.location.reload();
