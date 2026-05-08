@@ -285,12 +285,10 @@
     var API_URL = 'https://corsproxy.io/?' + encodeURIComponent(RWS_URL);
 
     function clean(text) {
-      return String(text || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function escapeHtml(text) {
-      return clean(text)
-        .replace(/&/g, '&amp;')
+    // Proxy is used to avoid CORS issues on GitHub Pages / kiosk browsers.
+    function buildApiUrl() {
+      return 'https://corsproxy.io/?' + encodeURIComponent(RWS_URL + '?_=' + new Date().getTime());
+    }&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
@@ -313,18 +311,12 @@
       var cause = clean(item.cause).toLowerCase();
 
       if (title.indexOf('langzaam') > -1 || title.indexOf('file') > -1) return 'Traffic jam';
-      if (cause.indexOf('ongeval') > -1 || title.indexOf('ongeval') > -1) return 'Incident';
-      if (cause.indexOf('werk') > -1 || title.indexOf('werk') > -1 || title.indexOf('afgesloten') > -1) return 'Roadworks';
-      return clean(item.cause || item.title || 'Traffic');
-    }
-
-    function itemImpact(item) {
-      var delay = Number(item.delay || 0);
-      var length = Number(item.length || 0);
-
-      if (delay > 0) {
-        return {
-          value: Math.round(delay) + ' min',
+      if (cause.indexOf('ongeval') > -1 || title.indexOf('ongeval') > -1) return 'Incidentif (title.indexOf('langzaam') > -1 || title.indexOf('file') > -1 || cause.indexOf('file') > -1) return 'Traffic jam';
+      if (cause.indexOf('ongeval') > -1 || title.indexOf('ongeval') > -1 || cause.indexOf('incident') > -1) return 'Incident';
+      if (cause.indexOf('werk') > -1 || title.indexOf('werk') > -1 || title.indexOf('afgesloten') > -1 || cause.indexOf('afsluiting') > -1) return 'Roadworks';
+      if (cause.indexOf('object') > -1 || title.indexOf('object') > -1) return 'Object on road';
+      if (cause.indexOf('slecht weer') > -1 || title.indexOf('weer') > -1) return 'Weather warning';
+      return 'Traffic update'; value: Math.round(delay) + ' min',
           label: length > 0 ? (length / 1000).toFixed(1) + ' km' : 'delay'
         };
       }
@@ -407,8 +399,8 @@
       xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              renderTraffic(JSON.parse(xhr.responseText));
+          xhr.open('GET', buildApiUrl(), true);
+      xhr.setRequestHeader('Cache-Control', 'no-cache');ffic(JSON.parse(xhr.responseText));
             } catch (error) {
               document.getElementById('traffic').innerHTML = '<div class="status">Traffic data could not be read.</div>';
             }
@@ -427,3 +419,6 @@
       window.location.reload();
     }, 86400000);
   </script>
+</body>
+</html>
+setInterval(loadTraffic, 60000);}, 21600000);
