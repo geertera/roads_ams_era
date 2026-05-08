@@ -6,7 +6,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Netherlands Traffic</title>
+  <title>Traffic</title>
 
   <style>
     :root {
@@ -248,14 +248,14 @@
 
   <main class="page">
     <section class="hero" aria-label="Traffic source">
-      <div class="eyebrow">ANWB Live</div>
-      <h1 class="title">Netherlands traffic</h1>
+      <div class="eyebrow">Live road updates</div>
+      <h1 class="title">Traffic</h1>
       <div class="accent-line"></div>
 
       <div class="summary">
         <div class="summary-box">
           <div class="summary-number" id="jam-count">--</div>
-          <div class="summary-label">Traffic jams</div>
+          <div class="summary-label">Items</div>
         </div>
         <div class="summary-box">
           <div class="summary-number" id="jam-km">--</div>
@@ -264,8 +264,8 @@
       </div>
     </section>
 
-    <section class="traffic-card" aria-label="Traffic in the Netherlands">
-      <div class="card-label">Current traffic jams</div>
+    <section class="traffic-card" aria-label="Traffic updates">
+      <div class="card-label">Current traffic updates</div>
       <div id="traffic" class="traffic-list">
         <div class="status">Loading traffic...</div>
       </div>
@@ -273,11 +273,11 @@
   </main>
 
   <script>
-    var ANWB_URL = 'https://www.anwb.nl/verkeer/filelijst';
+    // Direct Rijkswaterstaat API. This keeps the setup GitHub-only.
+    var TRAFFIC_API_URL = 'https://api.rwsverkeersinfo.nl/api/traffic/';
 
     function buildApiUrl() {
-      // Jina Reader returns a cleaner text version of the ANWB page.
-      return 'https://r.jina.ai/http://r.jina.ai/http://r.jina.ai/http://https://www.anwb.nl/verkeer/filelijst?_=' + new Date().getTime();
+      return TRAFFIC_API_URL + '?_=' + new Date().getTime();
     }
 
     function clean(text) {
@@ -293,154 +293,85 @@
         .replace(/'/g, '&#039;');
     }
 
-    function extractTextFromResponse(responseText) {
-      var parser = new DOMParser();
-      var doc = parser.parseFromString(responseText, 'text/html');
-      return clean(doc.body ? doc.body.textContent : responseText);
+    function typeLabel(item) {
+      var title = clean(item.title).toLowerCase();
+      var cause = clean(item.cause).toLowerCase();
+
+      if (title.indexOf('langzaam') > -1 || title.indexOf('file') > -1 || cause.indexOf('file') > -1) return 'Traffic jam';
+      if (cause.indexOf('ongeval') > -1 || title.indexOf('ongeval') > -1 || cause.indexOf('incident') > -1) return 'Incident';
+      if (cause.indexOf('werk') > -1 || title.indexOf('werk') > -1 || title.indexOf('afgesloten') > -1 || cause.indexOf('afsluiting') > -1) return 'Roadworks';
+      if (cause.indexOf('object') > -1 || title.indexOf('object') > -1) return 'Object on road';
+      if (cause.indexOf('slecht weer') > -1 || title.indexOf('weer') > -1) return 'Weather warning';
+      return 'Traffic update';
     }
 
-    function parseTraffic(text) {
-      var items = [];
-      var totalKm = 0;
-      var seen = {};
+    function itemImpact(item) {
+      var delay = Number(item.delay || 0);
+      var length = Number(item.length || 0);
 
-      text = clean(text)
-        .split('{').join(' ')
-        .split('}').join(' ')
-        .split('[').join(' ')
-        .split(']').join(' ')
-        .split('"').join(' ')
-        .split(':').join(' ')
-        .split(',').join(' ');
-
-      var words = text.split(' ');
-
-      function isRoad(word) {
-        if (!word || word.length < 2 || word.length > 4) return false;
-        var first = word.charAt(0);
-        if (first !== 'A' && first !== 'N' && first !== 'E') return false;
-        var rest = word.substring(1);
-        return String(parseInt(rest, 10)) === rest;
+      if (delay > 0) {
+        return {
+          value: Math.round(delay) + ' min',
+          label: length > 0 ? (length / 1000).toFixed(1) + ' km' : 'delay'
+        };
       }
 
-      function isNumber(word) {
-        return String(parseInt(word, 10)) === word;
+      if (length > 0) {
+        return {
+          value: (length / 1000).toFixed(1),
+          label: 'km'
+        };
       }
-
-      function addItem(road, routeWords, delay, km, closed) {
-        var route = clean(routeWords.join(' '));
-        route = route.split('Files in Nederland').join('');
-        route = route.split('Overzicht van files op wegnummer').join('');
-        route = route.split('Bekijk meer incidenten').join('');
-        route = clean(route);
-
-        if (!route || route.length < 3) return;
-        if (route.length > 80) route = route.substring(0, 80);
-
-        var key = road + '|' + route + '|' + delay + '|' + km + '|' + closed;
-        if (seen[key]) return;
-        seen[key] = true;
-
-        items.push({
-          road: road,
-          route: route,
-          delay: delay,
-          km: km,
-          closed: closed
-        });
-
-        totalKm += km;
-      }
-
-      for (var i = 0; i < words.length; i++) {
-        if (!isRoad(words[i])) continue;
-
-        var road = words[i];
-        var routeWords = [];
-        var delay = 0;
-        var km = 0;
-        var closed = false;
-        var foundMetric = false;
-        var end = Math.min(words.length, i + 32);
-
-        for (var j = i + 1; j < end; j++) {
-          var word = words[j];
-          var prev = words[j - 1];
-
-          if (j > i + 1 && isRoad(word)) break;
-
-          if (word === 'min' && isNumber(prev)) {
-            delay = parseInt(prev, 10);
-            foundMetric = true;
-            continue;
-          }
-
-          if (word === 'km' && isNumber(prev)) {
-            km = parseInt(prev, 10);
-            foundMetric = true;
-            continue;
-          }
-
-          if (word === 'Dicht') {
-            closed = true;
-            foundMetric = true;
-            continue;
-          }
-
-          if (foundMetric) continue;
-
-          if (word === '+' || isNumber(word)) continue;
-          if (word === 'files' || word === 'file') continue;
-          if (word === 'alertC' || word === 'reason' || word === 'text') continue;
-
-          if (routeWords.length < 8) routeWords.push(word);
-        }
-
-        if (!km && !delay && !closed) continue;
-        addItem(road, routeWords, delay, km, closed);
-      }
-
-      items.sort(function (a, b) {
-        if (b.delay !== a.delay) return b.delay - a.delay;
-        return b.km - a.km;
-      });
 
       return {
-        items: items.slice(0, 6),
-        totalItems: items.length,
-        totalKm: totalKm
+        value: 'Live',
+        label: 'update'
       };
     }
 
-    function renderTrafficFromText(responseText) {
+    function renderTraffic(data) {
       var container = document.getElementById('traffic');
-      var text = extractTextFromResponse(responseText);
-      var parsed = parseTraffic(text);
-      var items = parsed.items;
+      var items = data.obstructions || [];
+      var totalLength = Number(data.totalLengthOfJams || 0);
 
-      document.getElementById('jam-count').textContent = parsed.totalItems;
-      document.getElementById('jam-km').textContent = parsed.totalKm;
+      items = items.filter(function (item) {
+        return item && item.isCurrent !== false;
+      });
 
-      if (!items.length) {
-        container.innerHTML = '<div class="status">No current traffic jams found.</div>';
+      items.sort(function (a, b) {
+        var delayDiff = Number(b.delay || 0) - Number(a.delay || 0);
+        if (delayDiff !== 0) return delayDiff;
+        return Number(b.length || 0) - Number(a.length || 0);
+      });
+
+      var displayItems = items.slice(0, 6);
+
+      document.getElementById('jam-count').textContent = data.numberOfJams || items.length || 0;
+      document.getElementById('jam-km').textContent = totalLength > 0 ? (totalLength / 1000).toFixed(1) : '0';
+
+      if (!displayItems.length) {
+        container.innerHTML = '<div class="status">No major traffic updates right now.</div>';
         return;
       }
 
       var html = '';
-      for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        var impactValue = item.closed ? 'Closed' : (item.delay ? '+' + item.delay + ' min' : (item.km ? item.km + ' km' : 'Live'));
-        var impactLabel = item.closed ? 'road' : (item.km ? item.km + ' km' : 'update');
+      for (var i = 0; i < displayItems.length; i++) {
+        var traffic = displayItems[i];
+        var impact = itemImpact(traffic);
+        var road = clean(traffic.roadNumber || traffic.road || 'Road');
+        var title = typeLabel(traffic);
+        var location = clean(traffic.locationText || traffic.directionText || traffic.description || 'Netherlands');
+        var direction = clean(traffic.directionText);
 
         html += '<article class="traffic-item">' +
-          '<div class="road">' + escapeHtml(item.road) + '</div>' +
+          '<div class="road">' + escapeHtml(road) + '</div>' +
           '<div>' +
-            '<h2 class="headline">Traffic jam</h2>' +
-            '<div class="meta">' + escapeHtml(item.route) + '</div>' +
+            '<h2 class="headline">' + escapeHtml(title) + '</h2>' +
+            '<div class="meta">' + escapeHtml(direction ? direction + ' • ' + location : location) + '</div>' +
           '</div>' +
           '<div class="impact">' +
-            escapeHtml(impactValue) +
-            '<div class="impact-label">' + escapeHtml(impactLabel) + '</div>' +
+            escapeHtml(impact.value) +
+            '<div class="impact-label">' + escapeHtml(impact.label) + '</div>' +
           '</div>' +
         '</article>';
       }
@@ -456,7 +387,7 @@
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
-              renderTrafficFromText(xhr.responseText);
+              renderTraffic(JSON.parse(xhr.responseText));
             } catch (error) {
               document.getElementById('traffic').innerHTML = '<div class="status">Traffic data could not be read.</div>';
             }
