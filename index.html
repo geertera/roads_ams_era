@@ -301,33 +301,111 @@
     function parseTraffic(text) {
       var items = [];
       var totalKm = 0;
+      var seen = {};
 
-      // Matches patterns from ANWB filelijst/search snippets, for example:
-      // A12 Duitse grens Arnhem + 19 min 8 km
-      // N790 Deventer Gietelo Dicht
-      var regex = /\b([AN]\d{1,3}|E\d{1,3})\s+(.+?)\s+(?:\+\s*(\d+)\s*min\s*)?(?:(\d+)\s*km|Dicht)\b/g;
-      var match;
+      text = clean(text)
+        .replace(/\{/g, ' ')
+        .replace(/\}/g, ' ')
+        .replace(/\[/g, ' ')
+        .replace(/\]/g, ' ')
+        .replace(/"/g, ' ')
+        .replace(/:/g, ' ')
+        .replace(/,/g, ' ');
 
-      while ((match = regex.exec(text)) !== null) {
-        var road = clean(match[1]);
-        var rawRoute = clean(match[2]);
-        var delay = match[3] ? parseInt(match[3], 10) : 0;
-        var km = match[4] ? parseInt(match[4], 10) : 0;
+      var words = text.split(' ');
 
-        if (!road || rawRoute.length < 3) continue;
-        if (rawRoute.indexOf('Files in Nederland') > -1) continue;
-        if (rawRoute.length > 90) rawRoute = rawRoute.substring(rawRoute.length - 90);
+      function isRoad(word) {
+        if (!word || word.length < 2 || word.length > 4) return false;
+        var first = word.charAt(0);
+        if (first !== 'A' && first !== 'N' && first !== 'E') return false;
+        var rest = word.substring(1);
+        return String(parseInt(rest, 10)) === rest;
+      }
+
+      function isNumber(word) {
+        return String(parseInt(word, 10)) === word;
+      }
+
+      for (var i = 0; i < words.length; i++) {
+        if (!isRoad(words[i])) continue;
+
+        var road = words[i];
+        var routeWords = [];
+        var delay = 0;
+        var km = 0;
+        var closed = false;
+        var end = Math.min(words.length, i + 26);
+
+        for (var j = i + 1; j < end; j++) {
+          var word = words[j];
+          var prev = words[j - 1];
+
+          if (j > i + 1 && isRoad(word)) break;
+
+          if (word === 'min' && isNumber(prev)) {
+            delay = parseInt(prev, 10);
+            continue;
+          }
+
+          if (word === 'km' && isNumber(prev)) {
+            km = parseInt(prev, 10);
+            continue;
+          }
+
+          if (word === 'Dicht') {
+            closed = true;
+            continue;
+          }
+
+          if (
+            word === '+' ||
+            word === 'min' ||
+            word === 'km' ||
+            word === 'alertC' ||
+            word === 'text' ||
+            word === 'reason' ||
+            word === 'Langzaam' ||
+            word === 'rijdend' ||
+            word === 'tot' ||
+            word === 'stilstaand' ||
+            word === 'verkeer' ||
+            word === 'Te' ||
+            word === 'hoog' ||
+            word === 'voertuig'
+          ) {
+            continue;
+          }
+
+          if (routeWords.length < 8 && !isNumber(word)) {
+            routeWords.push(word);
+          }
+        }
+
+        if (!km && !delay && !closed) continue;
+
+        var route = clean(routeWords.join(' '));
+        if (!route || route.length < 4) route = 'Netherlands';
+        if (route.indexOf('alertC') > -1 || route.indexOf('reason') > -1 || route.indexOf('text') > -1) continue;
+
+        var key = road + '|' + route + '|' + km + '|' + delay + '|' + closed;
+        if (seen[key]) continue;
+        seen[key] = true;
 
         items.push({
           road: road,
-          route: rawRoute,
+          route: route,
           delay: delay,
           km: km,
-          closed: match[0].indexOf('Dicht') > -1
+          closed: closed
         });
 
         totalKm += km;
       }
+
+      items.sort(function (a, b) {
+        if (b.delay !== a.delay) return b.delay - a.delay;
+        return b.km - a.km;
+      });
 
       return {
         items: items.slice(0, 6),
