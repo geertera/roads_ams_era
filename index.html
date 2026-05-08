@@ -276,7 +276,15 @@
 
   <script>
     var RSS_FEED = 'https://www.verkeerplaza.nl/rssfeed';
-    var RSS_URL = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(RSS_FEED);
+
+    function buildFeedUrls() {
+      var cacheBuster = '?_=' + new Date().getTime();
+      return [
+        RSS_FEED + cacheBuster,
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(RSS_FEED + cacheBuster),
+        'https://corsproxy.io/?' + encodeURIComponent(RSS_FEED + cacheBuster)
+      ];
+    }
 
     function clean(text) {
       return String(text || '').replace(/\s+/g, ' ').trim();
@@ -422,22 +430,35 @@
       container.innerHTML = html;
     }
 
-    function load() {
+    function loadFromUrl(urls, index) {
       var xhr = new XMLHttpRequest();
-      xhr.open('GET', RSS_URL + '&_=' + new Date().getTime(), true);
+      xhr.open('GET', urls[index], true);
       xhr.onreadystatechange = function () {
         if (xhr.readyState === 4) {
           if (xhr.status >= 200 && xhr.status < 300) {
             var parser = new DOMParser();
             var xml = parser.parseFromString(xhr.responseText, 'text/xml');
             var items = xml.getElementsByTagName('item');
-            render(items);
+
+            if (items.length > 0) {
+              render(items);
+            } else if (index + 1 < urls.length) {
+              loadFromUrl(urls, index + 1);
+            } else {
+              document.getElementById('traffic').innerHTML = '<div class="status">Traffic feed returned no items.</div>';
+            }
+          } else if (index + 1 < urls.length) {
+            loadFromUrl(urls, index + 1);
           } else {
             document.getElementById('traffic').innerHTML = '<div class="status">Traffic unavailable.</div>';
           }
         }
       };
       xhr.send();
+    }
+
+    function load() {
+      loadFromUrl(buildFeedUrls(), 0);
     }
 
     load();
