@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Amsterdam Traffic</title>
+
+  <style>
+    :root {
+      --era-pink: #ff2e63;
+      --era-orange: #ff7a1a;
+      --era-purple: #7c3cff;
+      --text: #ffffff;
+      --muted: rgba(255, 255, 255, 0.66);
+      --card: rgba(10, 10, 10, 0.76);
+      --border: rgba(255, 255, 255, 0.15);
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      color: var(--text);
+      background: #050505;
+      font-family: Arial, Helvetica, "Liberation Sans", sans-serif;
+    }
+
+    body {
+      background:
+        linear-gradient(115deg, rgba(0, 0, 0, 0.96) 0%, rgba(0, 0, 0, 0.86) 48%, rgba(0, 0, 0, 0.58) 100%),
+        linear-gradient(135deg, #111111 0%, #050505 58%, #190815 100%);
+    }
+
+    .background-accent {
+      position: fixed;
+      right: -240px;
+      bottom: -280px;
+      width: 720px;
+      height: 720px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 46, 99, 0.34), rgba(124, 60, 255, 0.18) 42%, transparent 68%);
+      z-index: 0;
+    }
+
+    .brand-mark {
+      position: fixed;
+      top: 58px;
+      left: 72px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      letter-spacing: 0.18em;
+      font-size: 16px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .brand-dot {
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: var(--era-pink);
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      height: 100vh;
+      width: 100vw;
+      padding: 72px;
+      display: grid;
+      grid-template-columns: 0.88fr 1.28fr;
+      align-items: center;
+      gap: 72px;
+    }
+
+    .hero { padding-top: 48px; }
+
+    .eyebrow {
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.24em;
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 24px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 116px;
+      line-height: 0.9;
+      letter-spacing: -0.08em;
+      font-weight: 800;
+      text-transform: uppercase;
+      max-width: 780px;
+    }
+
+    .accent-line {
+      width: 250px;
+      height: 8px;
+      margin-top: 36px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--era-pink), var(--era-orange), var(--era-purple));
+    }
+
+    .summary {
+      margin-top: 42px;
+      display: grid;
+      grid-template-columns: repeat(2, 150px);
+      gap: 18px;
+    }
+
+    .summary-box {
+      padding: 18px 20px;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .summary-number {
+      font-size: 42px;
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: -0.05em;
+    }
+
+    .summary-label {
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-weight: 700;
+    }
+
+    .traffic-card {
+      justify-self: end;
+      width: 100%;
+      min-height: 620px;
+      padding: 48px;
+      border: 1px solid var(--border);
+      border-radius: 36px;
+      background: var(--card);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.45);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .traffic-card::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 7px;
+      border-radius: 36px 36px 0 0;
+      background: linear-gradient(90deg, var(--era-pink), var(--era-orange), var(--era-purple));
+    }
+
+    .card-label {
+      color: var(--muted);
+      font-size: 19px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 32px;
+    }
+
+    .traffic-list {
+      display: grid;
+      gap: 20px;
+    }
+
+    .traffic-item {
+      display: grid;
+      grid-template-columns: 96px 1fr 132px;
+      gap: 22px;
+      align-items: center;
+      padding-bottom: 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .traffic-item:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .road {
+      width: 76px;
+      min-height: 56px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 25px;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--era-pink), var(--era-orange));
+      color: #ffffff;
+    }
+
+    .headline {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+      font-weight: 800;
+    }
+
+    .meta {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.28;
+    }
+
+    .impact {
+      text-align: right;
+      font-size: 31px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+
+    .impact-label {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 17px;
+      font-weight: 600;
+    }
+
+    .status {
+      color: var(--muted);
+      font-size: 26px;
+      line-height: 1.3;
+      margin-top: 120px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="background-accent"></div>
+
+  <div class="brand-mark">
+    <div class="brand-dot"></div>
+    We Are Era
+  </div>
+
+  <main class="page">
+    <section class="hero" aria-label="Traffic source">
+      <div class="eyebrow">Rijkswaterstaat Live</div>
+      <h1 class="title">Amsterdam traffic</h1>
+      <div class="accent-line"></div>
+
+      <div class="summary">
+        <div class="summary-box">
+          <div class="summary-number" id="jam-count">--</div>
+          <div class="summary-label">Items</div>
+        </div>
+        <div class="summary-box">
+          <div class="summary-number" id="jam-km">--</div>
+          <div class="summary-label">KM delay</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="traffic-card" aria-label="Traffic around Amsterdam">
+      <div class="card-label">Current road updates</div>
+      <div id="traffic" class="traffic-list">
+        <div class="status">Loading traffic...</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    var AMSTERDAM_LAT = 52.3676;
+    var AMSTERDAM_LON = 4.9041;
+    var RADIUS_KM = 38;
+    var RWS_URL = 'https://api.rwsverkeersinfo.nl/api/traffic/';
+
+    // Proxy is used to avoid CORS issues on GitHub Pages / kiosk browsers.
+    var API_URL = 'https://corsproxy.io/?' + encodeURIComponent(RWS_URL);
+
+    function clean(text) {
+      return String(text || '').replace(/\s+/g, ' ').trim();
+    }
+
+    function escapeHtml(text) {
+      return clean(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function distanceKm(lat1, lon1, lat2, lon2) {
+      var R = 6371;
+      var dLat = (lat2 - lat1) * Math.PI / 180;
+      var dLon = (lon2 - lon1) * Math.PI / 180;
+      var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function typeLabel(item) {
+      var title = clean(item.title).toLowerCase();
+      var cause = clean(item.cause).toLowerCase();
+
+      if (title.indexOf('langzaam') > -1 || title.indexOf('file') > -1) return 'Traffic jam';
+      if (cause.indexOf('ongeval') > -1 || title.indexOf('ongeval') > -1) return 'Incident';
+      if (cause.indexOf('werk') > -1 || title.indexOf('werk') > -1 || title.indexOf('afgesloten') > -1) return 'Roadworks';
+      return clean(item.cause || item.title || 'Traffic');
+    }
+
+    function itemImpact(item) {
+      var delay = Number(item.delay || 0);
+      var length = Number(item.length || 0);
+
+      if (delay > 0) {
+        return {
+          value: Math.round(delay) + ' min',
+          label: length > 0 ? (length / 1000).toFixed(1) + ' km' : 'delay'
+        };
+      }
+
+      if (length > 0) {
+        return {
+          value: (length / 1000).toFixed(1),
+          label: 'km'
+        };
+      }
+
+      return {
+        value: 'Live',
+        label: 'update'
+      };
+    }
+
+    function renderTraffic(data) {
+      var container = document.getElementById('traffic');
+      var items = data.obstructions || [];
+      var nearby = [];
+      var totalLength = 0;
+
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (!item.latitude || !item.longitude || item.isCurrent === false) continue;
+
+        var dist = distanceKm(AMSTERDAM_LAT, AMSTERDAM_LON, Number(item.latitude), Number(item.longitude));
+        if (dist <= RADIUS_KM) {
+          item._distance = dist;
+          nearby.push(item);
+          totalLength += Number(item.length || 0);
+        }
+      }
+
+      nearby.sort(function (a, b) {
+        var delayDiff = Number(b.delay || 0) - Number(a.delay || 0);
+        if (delayDiff !== 0) return delayDiff;
+        return a._distance - b._distance;
+      });
+
+      nearby = nearby.slice(0, 6);
+
+      document.getElementById('jam-count').textContent = nearby.length;
+      document.getElementById('jam-km').textContent = totalLength > 0 ? (totalLength / 1000).toFixed(1) : '0';
+
+      if (!nearby.length) {
+        container.innerHTML = '<div class="status">No major traffic updates around Amsterdam.</div>';
+        return;
+      }
+
+      var html = '';
+      for (var j = 0; j < nearby.length; j++) {
+        var traffic = nearby[j];
+        var impact = itemImpact(traffic);
+        var road = clean(traffic.roadNumber || 'Road');
+        var title = typeLabel(traffic);
+        var location = clean(traffic.locationText || traffic.directionText || traffic.description || 'Around Amsterdam');
+        var direction = clean(traffic.directionText);
+
+        html += '<article class="traffic-item">' +
+          '<div class="road">' + escapeHtml(road) + '</div>' +
+          '<div>' +
+            '<h2 class="headline">' + escapeHtml(title) + '</h2>' +
+            '<div class="meta">' + escapeHtml(direction ? direction + ' • ' + location : location) + '</div>' +
+          '</div>' +
+          '<div class="impact">' +
+            escapeHtml(impact.value) +
+            '<div class="impact-label">' + escapeHtml(impact.label) + '</div>' +
+          '</div>' +
+        '</article>';
+      }
+
+      container.innerHTML = html;
+    }
+
+    function loadTraffic() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', API_URL, true);
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              renderTraffic(JSON.parse(xhr.responseText));
+            } catch (error) {
+              document.getElementById('traffic').innerHTML = '<div class="status">Traffic data could not be read.</div>';
+            }
+          } else {
+            document.getElementById('traffic').innerHTML = '<div class="status">Traffic data is temporarily unavailable.</div>';
+          }
+        }
+      };
+      xhr.send();
+    }
+
+    loadTraffic();
+    setInterval(loadTraffic, 180000);
+
+    setTimeout(function () {
+      window.location.reload();
+    }, 86400000);
+  </script>
